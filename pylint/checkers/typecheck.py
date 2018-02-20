@@ -862,6 +862,18 @@ accessed. Python regular expressions are accepted.'}
         """
         # Build the set of keyword arguments, checking for duplicate keywords,
         # and count the positional arguments.
+        print(node)
+        if isinstance(node.func, astroid.Attribute):
+            attribute_expr = next(node.func.expr.infer())
+            if attribute_expr is not astroid.Uninferable:
+                import pdb; pdb.set_trace()
+                stmts = attribute_expr._proxied.getattr(node.func.attrname)[0].body
+                context = astroid.CallContext()
+                context.callcontext = attribute_expr.callcontext
+                tuple(smts[0].value.func.expr.expr.inferred()[0].getattr("animal")[0].infer(context=context))
+
+                print("expr", attribute_expr)
+
         call_site = astroid.arguments.CallSite.from_call(node)
         num_positional_args = len(call_site.positional_arguments)
         keyword_args = list(call_site.keyword_arguments.keys())
