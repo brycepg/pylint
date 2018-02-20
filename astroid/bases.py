@@ -223,6 +223,17 @@ class Instance(BaseInstance):
     # pylint: disable=unnecessary-lambda
     special_attributes = util.lazy_descriptor(lambda: objectmodel.InstanceModel())
 
+    def __init__(self, proxied=None, callcontext=None):
+        super(Instance, self).__init__(proxied=proxied)
+        self.callcontext = callcontext
+
+    def igetattr(self, name, context=None):
+        if not context:
+            context = contextmod.InferenceContext()
+        if self.callcontext:
+            context.callcontext = self.callcontext
+        return super(Instance, self).igetattr(name, context)
+
     def __repr__(self):
         return '<Instance of %s.%s at 0x%s>' % (self._proxied.root().name,
                                                 self._proxied.name,

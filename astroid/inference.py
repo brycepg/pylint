@@ -256,6 +256,8 @@ def infer_attribute(self, context=None):
 
         try:
             context.boundnode = owner
+            if hasattr(owner, 'callcontext'):
+                context.callcontext = owner.callcontext
             for obj in owner.igetattr(self.attrname, context):
                 yield obj
             context.boundnode = None

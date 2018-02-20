@@ -1975,7 +1975,11 @@ class ClassDef(mixins.FilterStmtsMixin, LocalsDictNodeNG,
             result = self._infer_type_call(caller, context)
             yield result
         else:
-            yield bases.Instance(self)
+            if context:
+                callcontext = context.callcontext
+            else:
+                callcontext = None
+            yield bases.Instance(self, callcontext=callcontext)
 
     def scope_lookup(self, node, name, offset=0):
         """Lookup where the given name is assigned.
