@@ -63,6 +63,9 @@ class BaseReporter:
     def handle_message(self, msg):
         """Handle a new message triggered on the current file."""
 
+    def set_opts(self, opts):
+        """"""
+
     def set_output(self, output=None):
         """set output stream"""
         self.out = output or sys.stdout
@@ -100,6 +103,9 @@ class BaseReporter:
 
     def on_close(self, stats, previous_stats):
         """Hook called when a module finished analyzing."""
+
+    def exit_module(self):
+        """t"""
 
 
 class CollectingReporter(BaseReporter):

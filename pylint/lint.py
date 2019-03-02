@@ -389,6 +389,16 @@ class PyLinter(
                 },
             ),
             (
+                "order-by-line",
+                {
+                    "default": False,
+                    "type": "yn",
+                    "metavar": "<y_or_n>",
+                    "group": "Reports",
+                    "help": "order output messages by line number. Only supported by text format",
+                },
+            ),
+            (
                 "evaluation",
                 {
                     "type": "string",
@@ -926,6 +936,10 @@ class PyLinter(
 
     # pylint: enable=unused-argument
 
+    def configure_reporter(self):
+        """Set reporter options from configuration"""
+        self.reporter.set_opts({'order-by-line': self.config.order_by_line})
+
     def check(self, files_or_modules):
         """main checking entry: check a list of files or modules from their
         name.
@@ -1025,7 +1039,7 @@ class PyLinter(
                 msg = utils.Message(*msg)
                 self.set_current_module(module)
                 self.reporter.handle_message(msg)
-
+            self.reporter.exit_module()
             all_stats.append(stats)
             self.msg_status |= msg_status
 
@@ -1079,6 +1093,7 @@ class PyLinter(
             )
             for msgid, line, args in spurious_messages:
                 self.add_message(msgid, line, None, args)
+            self.reporter.exit_module()
         # notify global end
         self.stats["statement"] = walker.nbstatements
         for checker in reversed(_checkers):
@@ -1621,6 +1636,8 @@ group are mutually exclusive.",
         # We have loaded configuration from config file and command line. Now, we can
         # load plugin specific configuration.
         linter.load_plugin_configuration()
+
+        linter.configure_reporter()
 
         # insert current working directory to the python path to have a correct
         # behaviour

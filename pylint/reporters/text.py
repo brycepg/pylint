@@ -133,6 +133,12 @@ class TextReporter(BaseReporter):
         BaseReporter.__init__(self, output)
         self._modules = set()
         self._template = None
+        self.messages = []
+        self.order_by_line = False
+
+    def set_opts(self, opts):
+        if 'order-by-line' in opts:
+            self.order_by_line = opts['order-by-line']
 
     def on_set_current_module(self, module, filepath):
         self._template = str(self.linter.config.msg_template or self.line_format)
@@ -149,7 +155,19 @@ class TextReporter(BaseReporter):
                 self._modules.add(msg.module)
             else:
                 self.writeln("************* ")
-        self.write_message(msg)
+        if self.order_by_line:
+            self.messages.append(msg)
+        else:
+            self.write_message(msg)
+
+    def exit_module(self):
+        print("ORDER_BY_LINE", self.order_by_line)
+        if not self.order_by_line:
+            return
+        sorted_messages = sorted(self.messages, key=lambda msg: msg.line)
+        for msg in sorted_messages:
+            self.write_message(msg)
+        self.messages = []
 
     def _display(self, layout):
         """launch layouts display"""
@@ -239,6 +257,7 @@ class ColorizedTextReporter(TextReporter):
                 for attr in ("msg", "symbol", "category", "C")
             }
         )
+
         self.write_message(msg)
 
 
