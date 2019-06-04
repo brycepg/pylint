@@ -401,15 +401,15 @@ class TokenWrapper:
         return line_indent + " " * (self.start_col(idx) - len(line_indent))
 
 
-def _get_closing_bracket_token_position(tokens: TokenWrapper, position: int) -> Tuple[int, str]:
-    # position needs to correspond to a string _OPENING_BRACKETS
+def _get_closing_bracket_token_position(tokens: TokenWrapper, open_bracket_position: int) -> Tuple[int, str]:
+    # open_bracket_position needs to correspond to a string _OPENING_BRACKETS
     count = 0
-    bracket = tokens.string(position)
+    bracket = tokens.string(open_bracket_position)
     bracket_index = _OPENING_BRACKETS.index(bracket)
     closing_bracket = _CLOSING_BRACKETS[bracket_index]
-    _closing_position = position
+    _closing_position = open_bracket_position
     while True:
-        _cur_string = tokens.string(position)
+        _cur_string = tokens.string(open_bracket_position)
         if _cur_string == bracket:
             count += 1
         if _cur_string == closing_bracket:
@@ -429,14 +429,16 @@ def _is_closing_bracket_standalone(tokens: TokenWrapper, open_bracket_position: 
     #     False
     # ):
     # The closing bracket above is 'standalone'
-    bracket = tokens.string(open_bracket_position)
-    closing_bracket_token_position, closing_bracket = _get_closing_bracket_token_position(bracket)
+    closing_bracket_token_position, closing_bracket = _get_closing_bracket_token_position(open_bracket_position)
     closing_bracket_token_info_linenum = tokens.start_line(closing_bracket_token_position)
     if closing_bracket_token_position is None:
         # syntax error - ignore
         return False
     start_of_line_position = closing_bracket_token_position
-    while start_of_line_position > 0 and closing_bracket_token_info_linenum == tokens.start_line(start_of_line_position-1):
+    while (
+           start_of_line_position > 0 and
+           closing_bracket_token_info_linenum == tokens.start_line(start_of_line_position-1)
+           ):
         start_of_line_position -= 1
     if (
         tokens.token(start_of_line_position) == closing_bracket and
