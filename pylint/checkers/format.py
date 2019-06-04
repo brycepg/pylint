@@ -47,6 +47,7 @@ import keyword
 import sys
 import tokenize
 from functools import reduce  # pylint: disable=redefined-builtin
+from typing import Tuple
 
 from astroid import nodes
 
@@ -244,8 +245,6 @@ def _token_followed_by_eol(tokens, position):
         or tokens.type(position + 1) == tokenize.COMMENT
         and tokens.type(position + 2) == tokenize.NL
     )
-
-
 def _get_indent_string(line):
     """Return the indention string of the given line."""
     result = ""
@@ -402,6 +401,52 @@ class TokenWrapper:
         return line_indent + " " * (self.start_col(idx) - len(line_indent))
 
 
+def _get_closing_bracket_token_position(tokens: TokenWrapper, position: int) -> Tuple[int, str]:
+    # position needs to correspond to a string _OPENING_BRACKETS
+    count = 0
+    bracket = tokens.string(position)
+    bracket_index = _OPENING_BRACKETS.index(bracket)
+    closing_bracket = _CLOSING_BRACKETS[bracket_index]
+    _closing_position = position
+    while True:
+        _cur_string = tokens.string(position)
+        if _cur_string == bracket:
+            count += 1
+        if _cur_string == closing_bracket:
+            count -= 1
+        if count == 0:
+            return (_closing_position, closing_bracket)
+        _closing_position += 1
+
+
+def _is_closing_bracket_standalone(tokens: TokenWrapper, open_bracket_position: int) -> bool:
+    # Check if the closing bracket of the given open bracket is 'alone' or has no additional
+    # tokens on the same line
+    # other than end of line tokens or start of block
+    # Example:
+    # if (
+    #     True or
+    #     False
+    # ):
+    # The closing bracket above is 'standalone'
+    bracket = tokens.string(open_bracket_position)
+    closing_bracket_token_position, closing_bracket = _get_closing_bracket_token_position(bracket)
+    closing_bracket_token_info_linenum = tokens.start_line(closing_bracket_token_position)
+    if closing_bracket_token_position is None:
+        # syntax error - ignore
+        return False
+    start_of_line_position = closing_bracket_token_position
+    while start_of_line_position > 0 and closing_bracket_token_info_linenum == tokens.start_line(start_of_line_position-1):
+        start_of_line_position -= 1
+    if (
+        tokens.token(start_of_line_position) == closing_bracket and
+        tokens.token(start_of_line_position+1) == ":" and
+        tokens.type(start_of_line_position+2) in _EOL
+    ):
+        return True
+    return False
+
+
 class ContinuedLineState:
     """Tracker for continued indentation inside a logical line."""
 
@@ -463,9 +508,6 @@ class ContinuedLineState:
         """Returns the valid offsets for the token at the given position."""
         # The closing brace on a dict or the 'for' in a dict comprehension may
         # reset two indent levels because the dict value is ended implicitly
-        if idx == 11:
-            1/1
-            # import pdb; pdb.set_trace()
         stack_top = -1
         if (
             self._tokens.token(idx) in ("}", "for")
@@ -496,43 +538,7 @@ class ContinuedLineState:
             and self._continuation_string == self._block_indent_string
         ):
             valid_outdent_strings = _Indentations(indentation + self._continuation_string, indentation)
-            def _get_closing_bracket_token_position(bracket):
-                # Assumes there is a closing bracket
-                # () -> Optional[tokenize.TokenInfo]
-                count = 0
-                bracket_index = _OPENING_BRACKETS.index(bracket)
-                closing_bracket = _CLOSING_BRACKETS[bracket_index]
-                _cur_position = position
-                for token in self._tokens._tokens[position:]:
-                    if token.string == bracket:
-                        count += 1
-                    if token.string == closing_bracket:
-                        count -= 1
-                    if count == 0:
-                        return _cur_position
-                    _cur_position += 1
-                return None
-
-            def _is_closing_bracket_standalone(bracket):
-                closing_bracket_token_position = _get_closing_bracket_token_position(bracket)
-                closing_bracket_token_info_linenum = self._tokens.start_line(closing_bracket_token_position)
-                if closing_bracket_token_position is None:
-                    # syntax error - ignore
-                    return False
-                bracket_index = _OPENING_BRACKETS.index(bracket)
-                closing_bracket = _CLOSING_BRACKETS[bracket_index]
-                start_token_position = closing_bracket_token_position
-                while start_token_position > 0 and closing_bracket_token_info_linenum == self._tokens.start_line(start_token_position-1):
-                    start_token_position -= 1
-                # import pdb; pdb.set_trace()
-                if (
-                    self._tokens.token(start_token_position) == ')' and
-                    self._tokens.token(start_token_position+1) == ":" and
-                    self._tokens.type(start_token_position+2) in _EOL
-                ):
-                    return True
-                return False
-            if _is_closing_bracket_standalone(bracket):
+            if _is_closing_bracket_standalone(self._tokens, position):
                 multiline_indent = indentation + self._continuation_string
             else:
                 multiline_indent = indentation + self._continuation_string * 2
@@ -615,8 +621,6 @@ class ContinuedLineState:
         :param int token: The concrete token
         :param int position: The position of the token in the stream.
         """
-        # print(token, position)
-        # import pdb; pdb.set_trace()
         if _token_followed_by_eol(self._tokens, position):
             self._cont_stack.append(self._hanging_indent_after_bracket(token, position))
         else:
@@ -1185,8 +1189,6 @@ class FormatChecker(BaseTokenChecker):
                 # VVVVVVVVVVVVVVVVVV not valid indentations
             and tokens.token_indent(next_idx) in valid_indentations
         ):
-            # import pdb; pdb.set_trace()
-            # Move block warning processing to closing bracket. Save state to stack??
             self._current_line.add_block_warning(next_idx, state, valid_indentations)
         elif tokens.token_indent(next_idx) not in valid_indentations:
             length_indentation = len(tokens.token_indent(next_idx))
@@ -1199,12 +1201,10 @@ class FormatChecker(BaseTokenChecker):
                 )
 
     def _add_continuation_message(self, state, indentations, tokens, position):
-        # import pdb; pdb.set_trace()
         readable_type, readable_position = _CONTINUATION_MSG_PARTS[state.context_type]
         hint_line, delta_message = _get_indent_hint_line(
             indentations, tokens.token_indent(position)
         )
-        # import pdb; pdb.set_trace()
         self.add_message(
             "bad-continuation",
             line=tokens.start_line(position),
